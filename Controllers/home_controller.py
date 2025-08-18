@@ -152,6 +152,7 @@ def monthly():
 @home_blueprint.route('/suggest-reporting', methods=["GET", "POST"])
 def suggest_reporting():
     result = []
+    message = f"❌ 404 Not Found"
     if request.method == "POST":
         agent_code = request.form.get("agent_code", "").strip()
         if agent_code:
@@ -187,15 +188,29 @@ def do_transfer():
         return redirect(url_for("homepage.suggest_reporting"))
 
     try:
+        # Lưu lịch sử
+        get_current_agent_code = current_agent['agent_code']
+        get_current_new_leader_code = new_leader['agent_code']
+        type = "Transfer"
+        update_hist = Insert_Hist_Movement(get_current_agent_code, get_current_new_leader_code, type)
         # 3. Cập nhật collection Agent
+        if new_leader.get('is_virtual'):
+            reporting_to_code_value = new_leader.get('')
+            reporting_to_name_value = new_leader.get('')
+            grade_reporting_to_value = new_leader.get('')
+        else:
+            reporting_to_code_value = new_leader.get('agent_code', '')
+            reporting_to_name_value = new_leader.get('agent_name', '')
+            grade_reporting_to_value = new_leader.get('grade', '')
+
         update_query = f"""
             UPDATE "{current_agent['_key']}" WITH {{
-                reporting_to_code: "{new_leader['agent_code']}",
-                reporting_to_name: "{new_leader['agent_name']}",
-                grade_reporting_to: "{new_leader.get('grade', '')}",
-                agent_parent_code: "{new_leader['agent_code']}",
-                grade_id_parent: "{new_leader.get('grade', '')}"
-            }} IN Agent
+            reporting_to_code: "{reporting_to_code_value}",
+            reporting_to_name: "{reporting_to_name_value}",
+            grade_reporting_to: "{grade_reporting_to_value}",
+            agent_parent_code: "{new_leader['agent_code']}",
+            grade_id_parent: "AD"
+        }} IN Agent
         """
         db.aql.execute(update_query)
 
@@ -211,17 +226,14 @@ def do_transfer():
                 _to: "{new_leader['_id']}"
             }} INTO Reporting_To
         """)
-
-        # 5. Lưu lịch sử
-        get_current_agent_code = current_agent['agent_code']
-        get_current_new_leader_code = new_leader['agent_code']
-        type = "Transfer"
-        update_hist = Insert_Hist_Movement(get_current_agent_code, get_current_new_leader_code, type)
+        # Alert
         flash(f"✅ Đã chuyển {current_agent['agent_code']} sang leader {new_leader['agent_code']}", "success")
     
     except Exception as e:
         flash(f"❌ Lỗi khi cập nhật: {str(e)}", "error")
-    return redirect(url_for("homepage.suggest_reporting"))
+    message = f"Đã chuyển {current_agent_code} sang leader {new_leader_code}"
+    # Trả về template với message
+    return render_template("agent_transfer.html", result=[], message=message, agent_code=current_agent_code)
 
 # Lấy chi tiết thông tin đại lý
 @home_blueprint.route('/api/agent-detail/<agent_code>', methods=['GET'])

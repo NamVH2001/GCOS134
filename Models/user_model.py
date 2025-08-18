@@ -242,10 +242,10 @@ def Insert_Hist_Movement(agent_code , new_agent_code, movement_type: str):
     current_agent = get_document_agent(agent_code)
     new_leader = get_document_agent(new_agent_code)
  
-    print(f"----In data----")
-    print(f"{current_agent}")
-    print(f"{new_leader}")
-    print(f"{movement_type}")
+    # print(f"----In data----")
+    # print(f"{current_agent}")
+    # print(f"{new_leader}")
+    # print(f"{movement_type}")
     if not current_agent or not new_leader:
         # Có thể raise hoặc trả về None/ thông điệp tùy bạn
         return None
