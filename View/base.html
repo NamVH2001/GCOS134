@@ -58,25 +58,25 @@
 
     .tree-node {
       user-select: none;
-      cursor: pointer;
-      position: relative;
-      padding-left: 1.2em;
-      display: inline-block;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
 
-    /* Mũi tên */
-    .tree-node::before {
-      content: "▶";
-      position: absolute;
-      left: 0;
-      top: 0;
+    .tree-node .arrow {
+      cursor: pointer;
       font-size: 0.8em;
+      display: inline-block;
       transition: transform 0.2s ease;
     }
 
-    /* Khi mở rộng */
-    .tree-node.open::before {
+    .tree-node.open .arrow {
       transform: rotate(90deg);
+    }
+
+    .tree-node .node-label {
+      cursor: pointer;
+      display: inline-block;
     }
   </style>
 </head>
@@ -151,9 +151,8 @@
         .then((result) => {
           if (result.type === "json") {
             document.getElementById("search-area").style.display = "block";
-            document.getElementById("search-input").value = ""; // reset search
+            document.getElementById("search-input").value = "";
 
-            // buildTreeHtml nhận thêm param isRoot để gán data-root="true"
             function buildTreeHtml(node, isRoot = false) {
               let name = "";
 
@@ -169,18 +168,22 @@
                 name = `${code} - ${agentName} - ${agentGrade} - ${agentStatus}`;
               } else if (node.name) {
                 name = node.name;
-              }
-              else {
+              } else {
                 name = "Unknown";
               }
 
-              // Gán data-root="true" cho root node, và data-agent-code nếu có
               const dataRootAttr = isRoot ? 'data-root="true"' : "";
               const dataAgentCodeAttr = node.agent_code
                 ? `data-agent-code="${node.agent_code}"`
                 : "";
 
-              let html = `<li><span class="tree-node" ${dataRootAttr} ${dataAgentCodeAttr}>${name}</span>`;
+              let html = `
+                <li>
+                  <span class="tree-node" ${dataRootAttr} ${dataAgentCodeAttr}>
+                    <span class="arrow">▶</span>
+                    <span class="node-label">${name}</span>
+                  </span>
+              `;
 
               if (node.children && node.children.length > 0) {
                 html += '<ul class="nested">';
@@ -198,63 +201,49 @@
               '<ul class="tree-root">' + buildTreeHtml(result.data, true) + "</ul>";
             document.getElementById("content-area").innerHTML = treeHtml;
 
-            // Gắn sự kiện toggle mở rộng/thu gọn + gọi API khi click node lá
-            document.querySelectorAll(".tree-node").forEach((span) => {
-              span.addEventListener("click", function (e) {
-                const nextUl = this.nextElementSibling;
+            // Sự kiện cho arrow (chỉ toggle)
+            document.querySelectorAll(".tree-node .arrow").forEach((arrow) => {
+              arrow.addEventListener("click", function (e) {
+                const node = this.closest(".tree-node");
+                const nextUl = node.parentElement.querySelector(".nested");
 
-                // Kiểm tra xem node có phải root hoặc node cấp 1 (con trực tiếp của root) không
-                // Nếu có, chỉ toggle cây con, không hiện modal
-                const isRoot = this.getAttribute("data-root") === "true";
-                const isFirstLevel = this.parentElement.parentElement.classList.contains("tree-root");
-
-                if (
-                  nextUl &&
-                  nextUl.classList.contains("nested") &&
-                  nextUl.children.length > 0
-                ) {
-                  // Toggle cây con
+                if (nextUl) {
                   nextUl.classList.toggle("active");
-                  this.classList.toggle("open");
-
-                  // Nếu là root hoặc node cấp 1 thì dừng, không hiện modal
-                  if (isRoot || isFirstLevel) {
-                    e.stopPropagation();
-                    return;
-                  }
+                  node.classList.toggle("open");
                 }
+                e.stopPropagation();
+              });
+            });
 
-                // Node lá (không có con) hoặc không có con hoặc con rỗng
-                const agentCode = this.getAttribute("data-agent-code");
+            // Sự kiện cho node-label (mở modal)
+            document.querySelectorAll(".tree-node .node-label").forEach((label) => {
+              label.addEventListener("click", function (e) {
+                const node = this.closest(".tree-node");
+                const agentCode = node.getAttribute("data-agent-code");
+
                 if (!agentCode) {
-                  // Không có agent_code, hiện modal đơn giản
                   const modal = new bootstrap.Modal(document.getElementById("infoModal"));
                   document.getElementById("modalBodyContent").textContent = this.textContent;
                   modal.show();
                 } else {
-                  // Fetch dữ liệu chi tiết đại lý từ API
                   fetch(`/api/agent-detail/${encodeURIComponent(agentCode)}`, {
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                   })
                     .then((res) => {
-                      if (!res.ok)
-                        throw new Error("Không tìm thấy đại lý hoặc lỗi server");
+                      if (!res.ok) throw new Error("Không tìm thấy đại lý hoặc lỗi server");
                       return res.json();
                     })
                     .then((agentDetail) => {
                       const modal = new bootstrap.Modal(document.getElementById("infoModal"));
-
-                      // Tạo bảng hiển thị dữ liệu agentDetail
                       let html = '<table class="table table-bordered table-striped">';
                       for (const [key, value] of Object.entries(agentDetail)) {
                         html += `
-              <tr>
-                <th style="width:35%; text-transform: capitalize;">${key.replace(/_/g, " ")}</th>
-                <td>${value === null ? "" : value}</td>
-              </tr>`;
+                          <tr>
+                            <th style="width:35%; text-transform: capitalize;">${key.replace(/_/g, " ")}</th>
+                            <td>${value ?? ""}</td>
+                          </tr>`;
                       }
                       html += "</table>";
-
                       document.getElementById("modalBodyContent").innerHTML = html;
                       modal.show();
                     })
@@ -263,7 +252,6 @@
                       console.error(err);
                     });
                 }
-
                 e.stopPropagation();
               });
             });
@@ -279,12 +267,11 @@
         });
     }
 
-    // Submit search form bằng AJAX để không reload trang
     function submitSearch(e) {
       e.preventDefault();
       const keyword = document.getElementById("search-input").value.trim();
       if (keyword === "") {
-        loadContent("/tree-view"); // load toàn bộ cây
+        loadContent("/tree-view");
       } else {
         loadContent("/tree-view?searchInput=" + encodeURIComponent(keyword));
       }
@@ -292,5 +279,4 @@
   </script>
 
 </body>
-
 </html>
