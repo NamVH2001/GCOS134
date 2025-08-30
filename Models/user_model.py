@@ -86,25 +86,17 @@ def build_for_agent(agent):
 
 # Build cây toàn bộ
 def build_agent_tree(search_term=None):
-    
     bind_vars = {}
-    search_filter = ""
+    filter_clause = ""
 
     if search_term:
-        search_filter = """
-            AND (
-                LIKE(a.agent_code, @term, true) 
-                OR LIKE(a.agent_name, @term, true)
-            )
-        """
+        filter_clause = "FILTER LIKE(a.agent_code, @term, true) OR LIKE(a.agent_name, @term, true)"
         bind_vars["term"] = f"%{search_term}%"
-        
-    # Lấy dữ liệu
-    # FOR a IN dms_agent_detail/Agent
-    users = db.aql.execute("""
-    FOR a IN Agent 
-        """ + search_filter + """
-        RETURN {
+
+    query = f"""
+        FOR a IN Agent
+        {filter_clause}
+        RETURN {{
             area_code: a.area_code,
             area_name: a.area_name,       
             agent_code: a.agent_code,
@@ -112,11 +104,12 @@ def build_agent_tree(search_term=None):
             grade: a.grade,
             agent_status: a.agent_status,
             agent_parent_code: a.agent_parent_code
-        }
-    """, bind_vars=bind_vars)
-    nodes = list(users)
-
-    # Gom đại lý theo area_code
+        }}
+    """
+    cursor = db.aql.execute(query, bind_vars=bind_vars)
+    nodes = list(cursor)
+    
+    # Gom theo area_code
     area_groups = {}
     for n in nodes:
         su_code = n["area_code"]
@@ -124,12 +117,8 @@ def build_agent_tree(search_term=None):
             area_groups[su_code] = []
         area_groups[su_code].append(n)
 
-    # Build cây cho từng area_code
-    tree = {}
-    for ac, ag_list in area_groups.items():
-        tree[ac] = build_tree_for_area(ag_list)
+    tree = {ac: build_tree_for_area(ag_list) for ac, ag_list in area_groups.items()}
 
-    # Root chứa toàn bộ area_code
     root = {
         "name": "ROOT",
         "children": [
@@ -142,6 +131,7 @@ def build_agent_tree(search_term=None):
         ]
     }
     return root
+
 
 # List detail calculate
 def get_detail():
